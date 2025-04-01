@@ -31,8 +31,9 @@ reg [31:0] status_reg;        // Status register
 reg [31:0] matrix_a_addr;     // Matrix A base address
 reg [31:0] matrix_b_addr;     // Matrix B base address
 reg [31:0] matrix_c_addr;     // Matrix C result address
-reg [15:0] matrix_rows;       // Matrix dimensions
-reg [15:0] matrix_cols;
+reg [15:0] matrix_rows;    // Rows of A (M)
+reg [15:0] matrix_a_cols;  // Columns of A = Rows of B (N)
+reg [15:0] matrix_cols;    // Columns of B (P)
 reg computation_done; // Flag to indicate computation done
 
 // Internal Signals
@@ -66,7 +67,7 @@ typedef enum {
 reg [2:0] state;
 
 // MAC Units
-genvar i;
+logic i;
 generate
     for (i = 0; i < MAC_UNITS; i = i + 1) begin : mac_array
         // Instantiate MAC units here
@@ -213,15 +214,39 @@ always @(posedge clk) begin
 end
 
 // // Matrix Computation Logic
-// always @(posedge clk) begin
-//     if (state == COMPUTE) begin
-
-//         // Implement parallel dot product computation
-//         // using the instantiated MAC units
-//         // This would include nested loops for matrix multiplication
-//         // with pipelined operations
-//         // computation_done <= 1; // Set this flag when computation is done
-//     end
-//end
+always @(posedge clk) begin
+    if (reset) begin
+        row_counter <= 0;
+        col_counter <= 0;
+        dot_counter <= 0;
+        computation_done <= 0;
+    end else if (state == COMPUTE) begin
+        // Each cycle processes MAC_UNITS elements in parallel
+        if (dot_counter < matrix_a_cols-1) begin
+            dot_counter <= dot_counter + MAC_UNITS;
+        end else begin
+            dot_counter <= 0;
+            // Sum partial accumulations
+            c_buffer[row_counter][col_counter] <= 
+                mac_accumulator[0] + mac_accumulator[1] +
+                mac_accumulator[2] + mac_accumulator[3] +
+                mac_accumulator[4] + mac_accumulator[5] +
+                mac_accumulator[6] + mac_accumulator[7];
+            
+            if (col_counter < matrix_cols-1) begin
+                col_counter <= col_counter + 1;
+            end else begin
+                col_counter <= 0;
+                if (row_counter < matrix_rows-1) begin
+                    row_counter <= row_counter + 1;
+                end else begin
+                    computation_done <= 1;
+                end
+            end
+        end
+    end else begin
+        computation_done <= 0;
+    end
+end
 
 endmodule
