@@ -1,4 +1,4 @@
-module mac_unit (
+module mac (
     input wire clk,
     input wire reset,
     input wire clear,    // Clear accumulator

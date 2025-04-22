@@ -1,7 +1,7 @@
 //--------------------------------------------------
 // Matrix Accelerator
 //--------------------------------------------------
-module matrix_accelerator (
+module matrix (
     input wire clk, // switch to DE10-CLK
     input wire reset, // Make sure this is the correct reset signal
     
@@ -104,6 +104,7 @@ assign mac_enable = (state == COMPUTE);
 
 //--------------------------------------------------
 // Computation Logic (Single Source of Truth)
+//--------------------------------------------------
 always @(posedge clk) begin
     if (reset) begin
         row_counter <= 0;
@@ -171,7 +172,7 @@ always @(posedge clk) begin
         matrix_b_addr <= 0;
         matrix_c_addr <= 0;
         matrix_rows <= 0;
-        matrix_a_cols <= 0;  // Add this reset
+        matrix_a_cols <= 0;  
         matrix_cols <= 0;
     end else begin
         if (wb_stb_i && !wb_ack_o) begin
@@ -184,8 +185,8 @@ always @(posedge clk) begin
                     8'h08: matrix_b_addr <= wb_dat_i;
                     8'h0C: matrix_c_addr <= wb_dat_i;
                     8'h10: matrix_rows <= wb_dat_i[15:0];
-                    8'h12: matrix_a_cols <= wb_dat_i[15:0];  // New line
-                    8'h14: matrix_cols <= wb_dat_i[15:0];    // Updated line
+                    8'h12: matrix_a_cols <= wb_dat_i[15:0];  
+                    8'h14: matrix_cols <= wb_dat_i[15:0];    
                 endcase
             end else begin
                 // Register reads
@@ -195,7 +196,7 @@ always @(posedge clk) begin
                     8'h08: wb_dat_o <= matrix_b_addr;
                     8'h0C: wb_dat_o <= matrix_c_addr;
                     8'h10: wb_dat_o <= {16'b0, matrix_rows};
-                    8'h12: wb_dat_o <= {16'b0, matrix_a_cols};  // Add this
+                    8'h12: wb_dat_o <= {16'b0, matrix_a_cols};  
                     8'h14: wb_dat_o <= {16'b0, matrix_cols};
                     8'h16: wb_dat_o <= status_reg;
                     default: wb_dat_o <= 32'hDEADBEEF;
