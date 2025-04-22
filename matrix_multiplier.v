@@ -1,4 +1,6 @@
-// Matrix Multiplier Accelerator
+//--------------------------------------------------
+// Matrix Accelerator
+//--------------------------------------------------
 module matrix_accelerator (
     input wire clk, // switch to DE10-CLK
     input wire reset, // Make sure this is the correct reset signal
@@ -18,14 +20,9 @@ module matrix_accelerator (
     input wire [31:0] dma_data_i,
     output wire [31:0] dma_data_o,
     output wire dma_we
+   
 );
 
-// Configuration Parameters
-parameter MAT_SIZE = 8;       // 8x8 matrix
-parameter DATA_WIDTH = 32;    // 32-bit data
-parameter MAC_UNITS = 8;      // Number of parallel MAC units
-
-// Control Registers
 reg [31:0] ctrl_reg;          // Control register
 reg [31:0] status_reg;        // Status register
 reg [31:0] matrix_a_addr;     // Matrix A base address
@@ -35,8 +32,23 @@ reg [15:0] matrix_rows;    // Rows of A (M)
 reg [15:0] matrix_a_cols;  // Columns of A = Rows of B (N)
 reg [15:0] matrix_cols;    // Columns of B (P)
 reg computation_done; // Flag to indicate computation done
+//reg [31:0] load_counter_a, load_counter_b;
 
-// Internal Signals
+//  Configuration Parameters
+parameter MAT_SIZE = 8;       // 8x8 matrix
+parameter DATA_WIDTH = 32;    // 32-bit data
+parameter MAC_UNITS = 8;      // Number of parallel MAC units
+
+// Add these new declarations
+reg [15:0] row_counter;    // Current row in matrix A
+reg [15:0] col_counter;    // Current column in matrix B
+reg [15:0] dot_counter;    // Dot product element counter
+
+// MAC Unit Connections
+wire [31:0] mac_accumulator [0:MAC_UNITS-1];
+wire mac_clear;
+wire mac_enable;
+
 reg [DATA_WIDTH-1:0] a_buffer [0:MAT_SIZE-1][0:MAT_SIZE-1];
 reg [DATA_WIDTH-1:0] b_buffer [0:MAT_SIZE-1][0:MAT_SIZE-1];
 reg [DATA_WIDTH-1:0] c_buffer [0:MAT_SIZE-1][0:MAT_SIZE-1];
@@ -56,24 +68,97 @@ assign dma_addr = (state == LOAD_MATRICES) ?
                   (state == STORE_RESULTS) ? matrix_c_offset :
                   32'h0;  // Default address
 
-// FSM States
-typedef enum {
-    IDLE,
-    LOAD_MATRICES,
-    COMPUTE,
-    STORE_RESULTS,
-    DONE
-} state_t;
+						
+						
+parameter IDLE        = 3'd0;
+parameter LOAD_MATRICES = 3'd1;
+parameter COMPUTE     = 3'd2;
+parameter STORE_RESULTS = 3'd3;
+parameter DONE        = 3'd4;
+
 reg [2:0] state;
 
-// MAC Units
-logic i;
+//--------------------------------------------------
+// MAC Unit Array Instantiation
+//--------------------------------------------------
 generate
+    genvar i;
     for (i = 0; i < MAC_UNITS; i = i + 1) begin : mac_array
-        // Instantiate MAC units here
-        // Each MAC unit would contain multiplier and accumulator
+        mac_unit mac_inst (
+            .clk(clk),
+            .reset(reset),
+            .clear(mac_clear),
+            .enable(mac_enable),
+            .a_in(a_buffer[row_counter][(dot_counter + i) % MAT_SIZE]),
+				.b_in(b_buffer[(dot_counter + i) % MAT_SIZE][col_counter]),
+            .accum_out(mac_accumulator[i])
+        );
     end
 endgenerate
+
+//--------------------------------------------------
+// MAC Control Signals
+//--------------------------------------------------
+assign mac_clear = (state == COMPUTE) && (dot_counter == 0);
+assign mac_enable = (state == COMPUTE);
+
+//--------------------------------------------------
+// Computation Logic (Single Source of Truth)
+always @(posedge clk) begin
+    if (reset) begin
+        row_counter <= 0;
+        col_counter <= 0;
+        dot_counter <= 0;
+        computation_done <= 0;
+    end else if (state == COMPUTE) begin
+        if (dot_counter <= (matrix_a_cols - MAC_UNITS)) begin
+            // Process MAC_UNITS elements per cycle
+            dot_counter <= dot_counter + MAC_UNITS;
+        end else begin
+            // Final accumulation
+            dot_counter <= 0;
+            c_buffer[row_counter][col_counter] <= 
+                mac_accumulator[0] + mac_accumulator[1] +
+                mac_accumulator[2] + mac_accumulator[3] +
+                mac_accumulator[4] + mac_accumulator[5] +
+                mac_accumulator[6] + mac_accumulator[7];
+
+            // Update indices
+            if (col_counter < (matrix_cols - 1)) begin
+                col_counter <= col_counter + 1;
+            end else begin
+                col_counter <= 0;
+                if (row_counter < (matrix_rows - 1)) begin
+                    row_counter <= row_counter + 1;
+                end else begin
+                    computation_done <= 1;
+                end
+            end
+        end
+    end else begin
+        computation_done <= 0;
+    end
+end
+
+//--------------------------------------------------
+// DMA Data Handling (Updated)
+//--------------------------------------------------
+assign dma_data_o = c_buffer[store_counter / matrix_cols]
+                      [store_counter % matrix_cols];
+							 
+// During loading phase
+always @(posedge clk) begin
+    if (dma_ack && (state == LOAD_MATRICES)) begin
+        if (loading_matrix_a) begin
+           a_buffer[load_counter / matrix_a_cols]
+						[load_counter % matrix_a_cols] <= dma_data_i;
+        end else begin
+           b_buffer[load_counter / matrix_cols]
+						[load_counter % matrix_cols] <= dma_data_i;
+        end
+    end
+end
+
 
 // Wishbone Interface
 always @(posedge clk) begin
@@ -86,6 +171,7 @@ always @(posedge clk) begin
         matrix_b_addr <= 0;
         matrix_c_addr <= 0;
         matrix_rows <= 0;
+        matrix_a_cols <= 0;  // Add this reset
         matrix_cols <= 0;
     end else begin
         if (wb_stb_i && !wb_ack_o) begin
@@ -98,7 +184,8 @@ always @(posedge clk) begin
                     8'h08: matrix_b_addr <= wb_dat_i;
                     8'h0C: matrix_c_addr <= wb_dat_i;
                     8'h10: matrix_rows <= wb_dat_i[15:0];
-                    8'h12: matrix_cols <= wb_dat_i[15:0];
+                    8'h12: matrix_a_cols <= wb_dat_i[15:0];  // New line
+                    8'h14: matrix_cols <= wb_dat_i[15:0];    // Updated line
                 endcase
             end else begin
                 // Register reads
@@ -108,8 +195,9 @@ always @(posedge clk) begin
                     8'h08: wb_dat_o <= matrix_b_addr;
                     8'h0C: wb_dat_o <= matrix_c_addr;
                     8'h10: wb_dat_o <= {16'b0, matrix_rows};
-                    8'h12: wb_dat_o <= {16'b0, matrix_cols};
-                    8'h14: wb_dat_o <= status_reg;
+                    8'h12: wb_dat_o <= {16'b0, matrix_a_cols};  // Add this
+                    8'h14: wb_dat_o <= {16'b0, matrix_cols};
+                    8'h16: wb_dat_o <= status_reg;
                     default: wb_dat_o <= 32'hDEADBEEF;
                 endcase
             end
@@ -119,54 +207,8 @@ always @(posedge clk) begin
     end
 end
 
-// DMA Control Logic
-assign dma_req = (state == LOAD_MATRICES) || (state == STORE_RESULTS);
-assign dma_we = (state == STORE_RESULTS);
-assign dma_addr = 0; /* Calculate current address based on state also ask Shoib if this is okay*/
 
-// Counter control logic
-always @(posedge clk) begin
-    if (reset) begin
-        load_counter <= 0;
-        store_counter <= 0;
-        loading_matrix_a <= 1;
-    end else begin
-        case(state)
-            LOAD_MATRICES: begin
-                if (dma_ack) begin
-                    if (loading_matrix_a) begin
-                        // Check if we've loaded all elements of A
-                        if (load_counter == (matrix_rows * matrix_cols - 1)) begin
-                            loading_matrix_a <= 0;
-                            load_counter <= 0;
-                        end else begin
-                            load_counter <= load_counter + 1;
-                        end
-                    end else begin
-                        // Loading matrix B
-                        if (load_counter == (matrix_cols * matrix_rows - 1)) begin
-                            load_counter <= 0;
-                        end else begin
-                            load_counter <= load_counter + 1;
-                        end
-                    end
-                end
-            end
-            
-            STORE_RESULTS: begin
-                if (dma_ack) begin
-                    store_counter <= store_counter + 1;
-                end
-            end
-            
-            default: begin
-                load_counter <= 0;
-                store_counter <= 0;
-                loading_matrix_a <= 1;
-            end
-        endcase
-    end
-end
+
 // Main State Machine
 always @(posedge clk) begin
     if (reset) begin
@@ -182,15 +224,31 @@ always @(posedge clk) begin
             end
             
            LOAD_MATRICES: begin
-                // Check if both matrices are loaded
-                if (!loading_matrix_a && dma_ack && (load_counter == (matrix_cols * matrix_rows - 1))) begin
-                    state <= COMPUTE;
-                end
-            end
+					 if (dma_ack) begin
+						  if (loading_matrix_a) begin
+								// Matrix A: rows x a_cols
+								if (load_counter == (matrix_rows * matrix_a_cols - 1)) begin
+									 loading_matrix_a <= 0;
+									 load_counter <= 0;
+								end else begin
+									 load_counter <= load_counter + 1;
+								end
+						  end else begin
+								// Matrix B: a_cols x cols
+								if (load_counter == (matrix_a_cols * matrix_cols - 1)) begin
+									 state <= COMPUTE;
+									 load_counter <= 0;
+								end else begin
+									 load_counter <= load_counter + 1;
+								end
+						  end
+					 end
+				end
+
         
             STORE_RESULTS: begin
                 // Check if all results are stored
-                if (dma_ack && (store_counter == (matrix_rows * matrix_rows - 1))) begin
+                if (dma_ack && (store_counter == (matrix_rows * matrix_cols - 1))) begin
                     state <= DONE;
                 end
             end
@@ -213,40 +271,15 @@ always @(posedge clk) begin
     end
 end
 
-// // Matrix Computation Logic
+
 always @(posedge clk) begin
     if (reset) begin
-        row_counter <= 0;
-        col_counter <= 0;
-        dot_counter <= 0;
-        computation_done <= 0;
-    end else if (state == COMPUTE) begin
-        // Each cycle processes MAC_UNITS elements in parallel
-        if (dot_counter < matrix_a_cols-1) begin
-            dot_counter <= dot_counter + MAC_UNITS;
-        end else begin
-            dot_counter <= 0;
-            // Sum partial accumulations
-            c_buffer[row_counter][col_counter] <= 
-                mac_accumulator[0] + mac_accumulator[1] +
-                mac_accumulator[2] + mac_accumulator[3] +
-                mac_accumulator[4] + mac_accumulator[5] +
-                mac_accumulator[6] + mac_accumulator[7];
-            
-            if (col_counter < matrix_cols-1) begin
-                col_counter <= col_counter + 1;
-            end else begin
-                col_counter <= 0;
-                if (row_counter < matrix_rows-1) begin
-                    row_counter <= row_counter + 1;
-                end else begin
-                    computation_done <= 1;
-                end
-            end
-        end
-    end else begin
-        computation_done <= 0;
+        store_counter <= 0;
+    end else if (state == STORE_RESULTS && dma_ack) begin
+        store_counter <= store_counter + 1;
     end
-end
-
+end							 
+							 
 endmodule
+
+
