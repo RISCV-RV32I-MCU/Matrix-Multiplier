@@ -172,13 +172,13 @@ always @(posedge clk) begin
     if (reset) begin
         wb_dat_o <= 0;
         wb_ack_o <= 0;
-        // Reset control registers
+       
         ctrl_reg <= 0;
         matrix_a_addr <= 0;
         matrix_b_addr <= 0;
         matrix_c_addr <= 0;
         matrix_rows <= 0;
-        matrix_a_cols <= 0;  // Add this reset
+        matrix_a_cols <= 0;  
         matrix_cols <= 0;
     end else begin
         if (wb_stb_i && !wb_ack_o) begin
