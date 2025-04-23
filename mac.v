@@ -8,15 +8,16 @@ module mac (
     output wire [31:0] accum_out
 );
 
-reg [31:0] accumulator;
+    reg [31:0] accumulator;
 
-always @(posedge clk) begin
-    if (reset || clear) begin
-        accumulator <= 32'd0;
-    end else if (enable) begin
-        accumulator <= accumulator + (a_in * b_in);
+    always @(posedge clk) begin
+        if (reset || clear) begin
+            accumulator <= 32'd0;
+        end else if (enable) begin
+            accumulator <= accumulator + (a_in * b_in);
+        end
     end
-end
 
-assign accum_out = accumulator;
+    assign accum_out = accumulator;
+
 endmodule
