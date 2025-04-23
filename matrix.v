@@ -84,7 +84,7 @@ reg [2:0] state;
 generate
     genvar i;
     for (i = 0; i < MAC_UNITS; i = i + 1) begin : mac_array
-        mac_unit mac_inst (
+        mac mac_inst ( // this needs to be re named to match the module
             .clk(clk),
             .reset(reset),
             .clear(mac_clear),
