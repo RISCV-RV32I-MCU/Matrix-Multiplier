@@ -4,7 +4,7 @@
 module matrix (
     input wire clk, // switch to DE10-CLK
     input wire reset, // Make sure this is the correct reset signal
-    
+
     // Wishbone Bus Interface (CPU side) // Check with the PM and bosses to ensure this interface is okkay
     input wire [31:0] wb_adr_i,
     input wire [31:0] wb_dat_i,
@@ -12,7 +12,7 @@ module matrix (
     input wire wb_we_i,
     input wire wb_stb_i,
     output reg wb_ack_o,
-    
+
     // DMA Interface
     output wire dma_req,
     input wire dma_ack,
@@ -20,7 +20,7 @@ module matrix (
     input wire [31:0] dma_data_i,
     output wire [31:0] dma_data_o,
     output wire dma_we
-   
+
 );
 
 reg [31:0] ctrl_reg;          // Control register
@@ -63,13 +63,11 @@ wire [31:0] matrix_a_offset = matrix_a_addr + (load_counter << 2);  // Multiply 
 wire [31:0] matrix_b_offset = matrix_b_addr + (load_counter << 2);
 wire [31:0] matrix_c_offset = matrix_c_addr + (store_counter << 2);
 
-assign dma_addr = (state == LOAD_MATRICES) ? 
+assign dma_addr = (state == LOAD_MATRICES) ?
                     (loading_matrix_a ? matrix_a_offset : matrix_b_offset) :
                   (state == STORE_RESULTS) ? matrix_c_offset :
                   32'h0;  // Default address
 
-						
-						
 parameter IDLE        = 3'd0;
 parameter LOAD_MATRICES = 3'd1;
 parameter COMPUTE     = 3'd2;
@@ -146,7 +144,7 @@ end
 //--------------------------------------------------
 assign dma_data_o = c_buffer[store_counter / matrix_cols]
                       [store_counter % matrix_cols];
-							 
+
 // During loading phase
 always @(posedge clk) begin
     if (dma_ack && (state == LOAD_MATRICES)) begin
@@ -172,7 +170,7 @@ always @(posedge clk) begin
         matrix_b_addr <= 0;
         matrix_c_addr <= 0;
         matrix_rows <= 0;
-        matrix_a_cols <= 0;  
+        matrix_a_cols <= 0;
         matrix_cols <= 0;
     end else begin
         if (wb_stb_i && !wb_ack_o) begin
@@ -185,8 +183,8 @@ always @(posedge clk) begin
                     8'h08: matrix_b_addr <= wb_dat_i;
                     8'h0C: matrix_c_addr <= wb_dat_i;
                     8'h10: matrix_rows <= wb_dat_i[15:0];
-                    8'h12: matrix_a_cols <= wb_dat_i[15:0];  
-                    8'h14: matrix_cols <= wb_dat_i[15:0];    
+                    8'h12: matrix_a_cols <= wb_dat_i[15:0];
+                    8'h14: matrix_cols <= wb_dat_i[15:0];
                 endcase
             end else begin
                 // Register reads
@@ -196,7 +194,7 @@ always @(posedge clk) begin
                     8'h08: wb_dat_o <= matrix_b_addr;
                     8'h0C: wb_dat_o <= matrix_c_addr;
                     8'h10: wb_dat_o <= {16'b0, matrix_rows};
-                    8'h12: wb_dat_o <= {16'b0, matrix_a_cols};  
+                    8'h12: wb_dat_o <= {16'b0, matrix_a_cols};
                     8'h14: wb_dat_o <= {16'b0, matrix_cols};
                     8'h16: wb_dat_o <= status_reg;
                     default: wb_dat_o <= 32'hDEADBEEF;
@@ -207,8 +205,6 @@ always @(posedge clk) begin
         end
     end
 end
-
-
 
 // Main State Machine
 always @(posedge clk) begin
@@ -223,7 +219,7 @@ always @(posedge clk) begin
                     status_reg <= 1;    // Busy flag
                 end
             end
-            
+
            LOAD_MATRICES: begin
 					 if (dma_ack) begin
 						  if (loading_matrix_a) begin
@@ -246,7 +242,6 @@ always @(posedge clk) begin
 					 end
 				end
 
-        
             STORE_RESULTS: begin
                 // Check if all results are stored
                 if (dma_ack && (store_counter == (matrix_rows * matrix_cols - 1))) begin
@@ -260,7 +255,7 @@ always @(posedge clk) begin
                     computation_done <= 0; // Reset the flag
                 end
             end
-            
+
             DONE: begin
                 status_reg <= 2;        // Done flag
                 if (!ctrl_reg[0]) begin // Clear start bit
@@ -279,8 +274,8 @@ always @(posedge clk) begin
     end else if (state == STORE_RESULTS && dma_ack) begin
         store_counter <= store_counter + 1;
     end
-end							 
-							 
+end
+
 endmodule
 
 
