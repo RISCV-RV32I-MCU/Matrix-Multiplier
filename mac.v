@@ -19,4 +19,5 @@ always @(posedge clk) begin
 end
 
 assign accum_out = accumulator;
+
 endmodule

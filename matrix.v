@@ -158,7 +158,6 @@ always @(posedge clk) begin
     end
 end
 
-
 // Wishbone Interface
 always @(posedge clk) begin
     if (reset) begin
@@ -267,7 +266,6 @@ always @(posedge clk) begin
     end
 end
 
-
 always @(posedge clk) begin
     if (reset) begin
         store_counter <= 0;
@@ -277,5 +275,3 @@ always @(posedge clk) begin
 end
 
 endmodule
-
-
