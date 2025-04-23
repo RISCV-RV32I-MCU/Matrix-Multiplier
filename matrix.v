@@ -268,7 +268,7 @@ always @(posedge clk) begin
                 // Perform matrix multiplication using MAC units
                 if (computation_done == 1) begin
                     state <= STORE_RESULTS;
-                    // Removed the line that resets computation_done here
+                    
                 end
             end
             
