@@ -1,7 +1,7 @@
 //--------------------------------------------------
 // Matrix Accelerator
 //--------------------------------------------------
-module matrix (
+module lab4_3201 (
     input wire clk, // switch to DE10-CLK
     input wire reset, // Make sure this is the correct reset signal
     
@@ -93,7 +93,7 @@ end
 generate
     genvar i;
     for (i = 0; i < MAC_UNITS; i = i + 1) begin : mac_array
-        mac mac_inst (
+        MAC mac_inst (
             .clk(clk),
             .reset(reset),
             .clear(mac_clear),
@@ -172,13 +172,13 @@ always @(posedge clk) begin
     if (reset) begin
         wb_dat_o <= 0;
         wb_ack_o <= 0;
-       
+        // Reset control registers
         ctrl_reg <= 0;
         matrix_a_addr <= 0;
         matrix_b_addr <= 0;
         matrix_c_addr <= 0;
         matrix_rows <= 0;
-        matrix_a_cols <= 0;  
+        matrix_a_cols <= 0;  // Add this reset
         matrix_cols <= 0;
     end else begin
         if (wb_stb_i && !wb_ack_o) begin
@@ -268,7 +268,7 @@ always @(posedge clk) begin
                 // Perform matrix multiplication using MAC units
                 if (computation_done == 1) begin
                     state <= STORE_RESULTS;
-                    
+                    // Removed the line that resets computation_done here
                 end
             end
             

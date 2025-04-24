@@ -1,7 +1,7 @@
 `timescale 1ns/1ps
 
 module tb_matrix();
-     reg clk;
+    reg clk;
     reg reset;
     
     // Wishbone signals
@@ -30,7 +30,7 @@ module tb_matrix();
     always #5 clk = ~clk;
     
     // Instantiate dut
-    matrix dut (
+    lab4_3201 dut (
         .clk(clk),
         .reset(reset),
         .wb_adr_i(wb_adr_i),
