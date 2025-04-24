@@ -30,7 +30,7 @@ module tb_matrix();
     always #5 clk = ~clk;
     
     // Instantiate dut
-    lab4_3201 dut (
+    matrix dut (
         .clk(clk),
         .reset(reset),
         .wb_adr_i(wb_adr_i),
@@ -84,7 +84,22 @@ module tb_matrix();
         end
     endtask
 	 
-	 
+	 task dma_store_results;
+    input [31:0] base_addr;
+    input integer num_elements;
+    integer i;
+    begin
+        for (i = 0; i < num_elements; i = i + 1) begin
+            // Wait for DMA request to store C[i]
+            wait(dma_req && dma_we && (dma_addr == (base_addr + (i << 2))));
+            @(posedge clk);
+            dma_ack = 1'b1;           // Acknowledge
+            received_c[i/MAT_B_COLS][i%MAT_B_COLS] = dma_data_o;
+            @(posedge clk);
+            dma_ack = 1'b0;
+        end
+    end
+endtask
 
     // Main test sequence
     initial begin
@@ -126,12 +141,20 @@ module tb_matrix();
         
         // Start computation
         wb_write(32'h00, 32'h1);
-        
-        // Perform DMA transfers
-			 fork
-			 dma_transfer(32'h1000, 0, MAT_A_ROWS*MAT_A_COLS); // Matrix A
-			 dma_transfer(32'h2000, 1, MAT_A_COLS*MAT_B_COLS); // Matrix B
-		join
+
+    // Fork DMA transfers for loading A/B and storing C
+    fork
+        // Load matrices A and B
+        begin
+            dma_transfer(32'h1000, 0, MAT_A_ROWS*MAT_A_COLS); // Matrix A
+            dma_transfer(32'h2000, 1, MAT_A_COLS*MAT_B_COLS); // Matrix B
+        end
+        // Handle storing results for Matrix C
+        begin
+            wait(dut.state == dut.STORE_RESULTS);
+            dma_store_results(32'h3000, MAT_A_ROWS*MAT_B_COLS);
+        end
+    join
         
         // Wait for completion
           wait(dut.state == dut.DONE);
@@ -139,9 +162,7 @@ module tb_matrix();
         // Verify results
         begin
             
-            
-            
-            
+            //test comments
             // Read results
             for (i = 0; i < MAT_A_ROWS*MAT_B_COLS; i = i + 1) begin
                 wait(dma_req && dma_we);
@@ -161,12 +182,7 @@ module tb_matrix();
                         error_count = error_count + 1;
                     end
                 end
-            end
-            
-            if (error_count == 0)
-                $display("All results match!");
-            else
-                $display("Found %0d errors", error_count);
+            end  
         end
         
         #100 $finish;

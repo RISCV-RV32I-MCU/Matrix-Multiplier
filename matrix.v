@@ -39,7 +39,7 @@ parameter MAT_SIZE = 3;       // 8x8 matrix
 parameter DATA_WIDTH = 32;    // 32-bit data
 parameter MAC_UNITS = 3;      // Number of parallel MAC units
 
-// Add these new declarations
+
 reg [15:0] row_counter;    // Current row in matrix A
 reg [15:0] col_counter;    // Current column in matrix B
 reg [15:0] dot_counter;    // Dot product element counter
@@ -235,32 +235,28 @@ always @(posedge clk) begin
 					 end
 				end
             
-           LOAD_MATRICES: begin
-					 if (dma_ack) begin
-					     $display("[LOAD] Counter=%0d, Matrix=%s, Time=%0t",
-							load_counter, 
-							loading_matrix_a ? "A" : "B", 
-							$time
-					  );
-						  if (loading_matrix_a) begin
-								// Matrix A: rows × a_cols elements
-								if (load_counter == (matrix_rows * matrix_a_cols - 1)) begin
-									 loading_matrix_a <= 0;
-									 load_counter <= 0;
-								end else begin
-									 load_counter <= load_counter + 1;
-								end
-						  end else begin
-								// Matrix B: a_cols × cols elements
-								if (load_counter == (matrix_a_cols * matrix_cols - 1)) begin
-									 state <= COMPUTE;
-									 load_counter <= 0;
-								end else begin
-									 load_counter <= load_counter + 1;
-								end
-						  end
-					 end
-				end
+          LOAD_MATRICES: begin
+    if (dma_ack) begin
+        if (loading_matrix_a) begin
+            // Load matrix A elements
+            if (load_counter == (matrix_rows * matrix_a_cols - 1)) begin
+                loading_matrix_a <= 0;
+                load_counter <= 0;
+            end else begin
+                load_counter <= load_counter + 1;
+            end
+        end else begin
+            // Load matrix B elements
+            if (load_counter == (matrix_a_cols * matrix_cols - 1)) begin
+                state <= COMPUTE;
+                load_counter <= 0;
+            end else begin
+                load_counter <= load_counter + 1;
+            end
+        end
+    end
+end
+	
 
             COMPUTE: begin
 		$display("[COMPUTE] row=%0d, col=%0d, dot_counter=%0d", 
@@ -268,7 +264,7 @@ always @(posedge clk) begin
                 // Perform matrix multiplication using MAC units
                 if (computation_done == 1) begin
                     state <= STORE_RESULTS;
-                    // Removed the line that resets computation_done here
+                    computation_done <= 0; // Reset for next computation
                 end
             end
             
