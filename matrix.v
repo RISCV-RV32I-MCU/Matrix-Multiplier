@@ -1,7 +1,7 @@
 //--------------------------------------------------
 // Matrix Accelerator
 //--------------------------------------------------
-module lab4_3201 (
+module matrix (
     input wire clk, // switch to DE10-CLK
     input wire reset, // Make sure this is the correct reset signal
     
@@ -264,7 +264,7 @@ end
                 // Perform matrix multiplication using MAC units
                 if (computation_done == 1) begin
                     state <= STORE_RESULTS;
-                    computation_done <= 0; // Reset for next computation
+                  
                 end
             end
             
