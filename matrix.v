@@ -93,7 +93,7 @@ end
 generate
     genvar i;
     for (i = 0; i < MAC_UNITS; i = i + 1) begin : mac_array
-        MAC mac_inst (
+        mac mac_inst (
             .clk(clk),
             .reset(reset),
             .clear(mac_clear),
